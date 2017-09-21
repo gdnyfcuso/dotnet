@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 
 using Raven.Client;
 using Raven.Client.Connection.Profiling;
-using StackExchange.Profiling.Helpers;
+using StackExchange.Profiling.Internal;
 
 namespace StackExchange.Profiling.RavenDb
 {
@@ -13,7 +13,7 @@ namespace StackExchange.Profiling.RavenDb
     /// </summary>
     public static class MiniProfilerRaven
     {
-        private static readonly Regex IndexQueryPattern = new Regex(@"/indexes/([A-Za-z/]+)");
+        private static readonly Regex IndexQueryPattern = new Regex("/indexes/([A-Za-z/]+)");
 
         /// <summary>
         /// Initialize MiniProfilerRaven for the given DocumentStore (only call once!)

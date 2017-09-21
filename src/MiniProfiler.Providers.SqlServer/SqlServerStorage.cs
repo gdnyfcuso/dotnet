@@ -6,7 +6,7 @@ using System.Linq;
 using System.Text;
 
 using Dapper;
-using StackExchange.Profiling.Helpers;
+using StackExchange.Profiling.Internal;
 using System.Threading.Tasks;
 
 namespace StackExchange.Profiling.Storage
@@ -34,7 +34,7 @@ SELECT * FROM MiniProfilerClientTimings WHERE MiniProfilerId = @id ORDER BY Star
 @"INSERT INTO MiniProfilers
             (Id,  RootTimingId,  Name,  Started,  DurationMilliseconds, [User], HasUserViewed,  MachineName,  CustomLinksJson,  ClientTimingsRedirectCount)
 SELECT      @Id, @RootTimingId, @Name, @Started, @DurationMilliseconds, @User, @HasUserViewed, @MachineName, @CustomLinksJson, @ClientTimingsRedirectCount
-WHERE NOT EXISTS (SELECT 1 FROM MiniProfilers WHERE Id = @Id)"; // this syntax works on both mssql and sqlite
+WHERE NOT EXISTS (SELECT 1 FROM MiniProfilers WHERE Id = @Id)"; // this syntax works on both MSSQL and SQLite
 
         private const string _saveTimingsSql = @"
 INSERT INTO MiniProfilerTimings
@@ -195,7 +195,7 @@ WHERE NOT EXISTS (SELECT 1 FROM MiniProfilerClientTimings WHERE Id = @Id)";
 
             if (result != null)
             {
-                // HACK: stored dates are utc, but are pulled out as local time
+                // HACK: stored dates are UTC, but are pulled out as local time
                 result.Started = new DateTime(result.Started.Ticks, DateTimeKind.Utc);
             }
             return result;
@@ -223,21 +223,21 @@ WHERE NOT EXISTS (SELECT 1 FROM MiniProfilerClientTimings WHERE Id = @Id)";
 
             if (result != null)
             {
-                // HACK: stored dates are utc, but are pulled out as local time
+                // HACK: stored dates are UTC, but are pulled out as local time
                 result.Started = new DateTime(result.Started.Ticks, DateTimeKind.Utc);
             }
             return result;
         }
 
         /// <summary>
-        /// Sets a particular profiler session so it is considered "un-viewed"  
+        /// Sets a particular profiler session so it is considered "unviewed"  
         /// </summary>
         /// <param name="user">The user to set this profiler ID as unviewed for.</param>
         /// <param name="id">The profiler ID to set unviewed.</param>
         public override void SetUnviewed(string user, Guid id) => ToggleViewed(user, id, false);
 
         /// <summary>
-        /// Asynchronously sets a particular profiler session so it is considered "un-viewed"  
+        /// Asynchronously sets a particular profiler session so it is considered "unviewed"  
         /// </summary>
         /// <param name="user">The user to set this profiler ID as unviewed for.</param>
         /// <param name="id">The profiler ID to set unviewed.</param>
@@ -289,7 +289,7 @@ Order By Started";
         /// <summary>
         /// Returns a list of <see cref="MiniProfiler.Id"/>s that haven't been seen by <paramref name="user"/>.
         /// </summary>
-        /// <param name="user">User identified by the current <c>MiniProfiler.Settings.UserProvider</c></param>
+        /// <param name="user">User identified by the current <c>MiniProfilerOptions.UserProvider</c></param>
         /// <returns>The list of keys for the supplied user</returns>
         public override List<Guid> GetUnviewedIds(string user)
         {
@@ -302,7 +302,7 @@ Order By Started";
         /// <summary>
         /// Asynchronously returns a list of <see cref="MiniProfiler.Id"/>s that haven't been seen by <paramref name="user"/>.
         /// </summary>
-        /// <param name="user">User identified by the current <c>MiniProfiler.Settings.UserProvider</c></param>
+        /// <param name="user">User identified by the current <c>MiniProfilerOptions.UserProvider</c></param>
         /// <returns>The list of keys for the supplied user</returns>
         public override async Task<List<Guid>> GetUnviewedIdsAsync(string user)
         {
@@ -398,7 +398,7 @@ Select Top {=maxResults} Id
         /// <remarks>
         /// Works in SQL server and <c>sqlite</c> (with documented removals).
         /// </remarks>
-        public static readonly string TableCreationScript =
+        public const string TableCreationScript =
                 @"
                 create table MiniProfilers
                   (

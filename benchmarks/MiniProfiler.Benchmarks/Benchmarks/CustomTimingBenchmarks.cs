@@ -10,10 +10,10 @@ namespace Benchmarks
     {
         private MiniProfiler Profiler;
 
-        [Setup]
+        [GlobalSetup]
         public void SetupData()
         {
-            Profiler = new MiniProfiler("Test");
+            Profiler = new MiniProfiler("Test", new MiniProfilerBaseOptions());
         }
 
         [Benchmark(Description = "Creation of a standalone CustomTiming")]

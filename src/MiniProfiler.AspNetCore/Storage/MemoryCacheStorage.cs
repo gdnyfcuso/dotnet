@@ -3,11 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using StackExchange.Profiling.Helpers;
 using StackExchange.Profiling.Internal;
-#if NETSTANDARD1_5
 using Microsoft.Extensions.Caching.Memory;
-#else
-using System.Runtime.Caching;
-#endif
 
 namespace StackExchange.Profiling.Storage
 {
@@ -16,12 +12,8 @@ namespace StackExchange.Profiling.Storage
     /// </summary>
     public class MemoryCacheStorage : IAsyncStorage
     {
-#if NETSTANDARD1_5
         private readonly IMemoryCache _cache;
         private MemoryCacheEntryOptions CacheEntryOptions { get; }
-#else
-        private readonly MemoryCache _cache;
-#endif
         private readonly SortedList<ProfilerSortedKey, object> _profiles = new SortedList<ProfilerSortedKey, object>();
 
         /// <summary>
@@ -33,9 +25,8 @@ namespace StackExchange.Profiling.Storage
         /// <summary>
         /// Gets or sets how long to cache each <see cref="MiniProfiler"/> for, in absolute terms.
         /// </summary>
-        public TimeSpan CacheDuration { get; }
+        public TimeSpan CacheDuration { get; set; }
 
-#if NETSTANDARD1_5
         /// <summary>
         /// Creates a memory cache provider, storing each result in the provided IMemoryCache
         /// for the specified duration.
@@ -49,24 +40,13 @@ namespace StackExchange.Profiling.Storage
             CacheDuration = cacheDuration;
             CacheEntryOptions = new MemoryCacheEntryOptions { SlidingExpiration = cacheDuration };
         }
-#else
-        /// <summary>
-        /// Creates a memory cache provider, storing each result in a MemoryCache for the specified duration.
-        /// </summary>
-        /// <param name="cacheDuration">The duration to cache each profiler, before it expires from cache.</param>
-        public MemoryCacheStorage(TimeSpan cacheDuration)
-        {
-            _cache = new MemoryCache("MiniProfilerCache");
-            CacheDuration = cacheDuration;
-        }
-#endif
 
         private string GetCacheKey(Guid id) => CacheKeyPrefix + id.ToString();
 
         /// <summary>
         /// Returns a list of <see cref="MiniProfiler.Id"/>s that haven't been seen by <paramref name="user"/>.
         /// </summary>
-        /// <param name="user">User identified by the current <c>MiniProfiler.Settings.UserProvider</c></param>
+        /// <param name="user">User identified by the current <c>MiniProfilerOptions.UserProvider</c></param>
         public List<Guid> GetUnviewedIds(string user)
         {
             var ids = GetPerUserUnviewedIds(user);
@@ -79,7 +59,7 @@ namespace StackExchange.Profiling.Storage
         /// <summary>
         /// Returns a list of <see cref="MiniProfiler.Id"/>s that haven't been seen by <paramref name="user"/>.
         /// </summary>
-        /// <param name="user">User identified by the current <c>MiniProfiler.Settings.UserProvider</c></param>
+        /// <param name="user">User identified by the current <c>MiniProfilerOptions.UserProvider</c></param>
         public Task<List<Guid>> GetUnviewedIdsAsync(string user) => Task.FromResult(GetUnviewedIds(user));
 
         private string GetPerUserUnviewedCacheKey(string user) => CacheKeyPrefix + "unviewed-for-user-" + user;

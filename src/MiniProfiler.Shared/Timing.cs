@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Serialization;
-using StackExchange.Profiling.Helpers;
+using StackExchange.Profiling.Internal;
 
 namespace StackExchange.Profiling
 {
@@ -21,7 +21,7 @@ namespace StackExchange.Profiling
         private readonly object _syncRoot = new object();
 
         /// <summary>
-        /// Initialises a new instance of the <see cref="Timing"/> class. 
+        /// Initializes a new instance of the <see cref="Timing"/> class. 
         /// Obsolete - used for serialization.
         /// </summary>
         [Obsolete("Used for serialization")]
@@ -159,10 +159,10 @@ namespace StackExchange.Profiling
 
         /// <summary>
         /// Gets a value indicating whether this <see cref="DurationMilliseconds"/> is less than the configured
-        /// <see cref="MiniProfiler.Settings.TrivialDurationThresholdMilliseconds"/>, by default 2.0 ms.
+        /// <see cref="MiniProfilerBaseOptions.TrivialDurationThresholdMilliseconds"/>, by default 2.0 ms.
         /// </summary>
         [IgnoreDataMember]
-        public bool IsTrivial => DurationMilliseconds <= MiniProfiler.Settings.TrivialDurationThresholdMilliseconds;
+        public bool IsTrivial => DurationMilliseconds <= Profiler.Options.TrivialDurationThresholdMilliseconds;
 
         /// <summary>
         /// Gets a value indicating whether this Timing has inner Timing steps.
@@ -216,7 +216,7 @@ namespace StackExchange.Profiling
         /// <summary>
         /// Returns true if Ids match.
         /// </summary>
-        /// <param name="obj">The <see cref="object"/> to comare to.</param>
+        /// <param name="obj">The <see cref="object"/> to compare to.</param>
         public override bool Equals(object obj)
         {
             return obj is Timing && Id.Equals(((Timing)obj).Id);

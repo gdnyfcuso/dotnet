@@ -32,11 +32,11 @@ namespace StackExchange.Profiling
 
         void IObserver<DiagnosticListener>.OnNext(DiagnosticListener value)
         {
-            foreach (var applicationInsightDiagnosticListener in _diagnosticListeners)
+            foreach (var listener in _diagnosticListeners)
             {
-                if (applicationInsightDiagnosticListener.ListenerName == value.Name)
+                if (listener.ListenerName == value.Name)
                 {
-                    _subscriptions.Add(value.SubscribeWithAdapter(applicationInsightDiagnosticListener));
+                    _subscriptions.Add(value.Subscribe(listener));
                 }
             }
         }

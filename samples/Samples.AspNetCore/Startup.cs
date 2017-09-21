@@ -1,13 +1,9 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Samples.AspNetCore.Models;
-using StackExchange.Profiling;
-using StackExchange.Profiling.Storage;
-using System;
 using System.IO;
 
 namespace Samples.AspNetCore
@@ -34,19 +30,43 @@ namespace Samples.AspNetCore
         {
             // Add framework services.
             services.AddDbContext<SampleContext>();
-
             services.AddMvc();
-            // Add MiniProfiler services
-            // If using Entity Framework Core, add profiling for it as well
-            // Note .AddMiniProfiler() returns a IMiniProfilerBuilder for easy intellisense
-            services.AddMiniProfiler()
-                    .AddEntityFramework();
 
-            services.AddMemoryCache();
+            // Add MiniProfiler services
+            // If using Entity Framework Core, add profiling for it as well (see the end)
+            // Note .AddMiniProfiler() returns a IMiniProfilerBuilder for easy intellisense
+            services.AddMiniProfiler(options =>
+            {
+                // ALL of this is optional. You can simply call .AddMiniProfiler() for all defaults
+                // Defaults: In-Memory for 30 minutes, everything profiled, every user can see
+
+                // Path to use for profiler URLs, default is /mini-profiler-resources
+                options.RouteBasePath = "/profiler";
+
+                // Control storage - the default is 30 minutes
+                //(options.Storage as MemoryCacheStorage).CacheDuration = TimeSpan.FromMinutes(60);
+
+                // Control which SQL formatter to use, InlineFormatter is the default
+                //options.SqlFormatter = new StackExchange.Profiling.SqlFormatters.InlineFormatter();
+
+                // To control authorization, you can use the Func<HttpRequest, bool> options:
+                //options.ResultsAuthorize = request => MyGetUserFunction(request).CanSeeMiniProfiler;
+                //options.ResultsListAuthorize = request => MyGetUserFunction(request).CanSeeMiniProfiler;
+
+                // To control which requests are profiled, use the Func<HttpRequest, bool> option:
+                //options.ShouldProfile = request => MyShouldThisBeProfiledFunction(request);
+
+                // Profiles are stored under a user ID, function to get it:
+                //options.UserIdProvider =  request => MyGetUserIdFunction(request);
+
+                // Optionally swap out the entire profiler provider, if you want
+                // The default handles async and works fine for almost all appliations
+                //options.ProfilerProvider = new MyProfilerProvider();
+            }).AddEntityFramework();
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
-        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory, IMemoryCache cache)
+        public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
             loggerFactory.AddConsole(Configuration.GetSection("Logging"));
             loggerFactory.AddDebug();
@@ -61,33 +81,9 @@ namespace Samples.AspNetCore
                 app.UseExceptionHandler("/Home/Error");
             }
 
+            app.UseMiniProfiler();
+
             app.UseStaticFiles();
-
-            app.UseMiniProfiler(new MiniProfilerOptions
-            {
-                // Path to use for profiler URLs
-                RouteBasePath = "~/profiler",
-
-                // Control which SQL formatter to use
-                SqlFormatter = new StackExchange.Profiling.SqlFormatters.InlineFormatter(),
-
-                // Control storage
-                Storage = new MemoryCacheStorage(cache, TimeSpan.FromMinutes(60)),
-
-                // To control authorization, you can use the Func<HttpRequest, bool> options:
-                //ResultsAuthorize = request => MyGetUserFunction(request).CanSeeMiniProfiler,
-                //ResultsListAuthorize = request => MyGetUserFunction(request).CanSeeMiniProfiler,
-
-                // To control which requests are profiled, use the Func<HttpRequest, bool> option:
-                //ShouldProfile = request => MyShouldThisBeProfiledFunction(request),
-
-                // Profiles are stored under a user ID, function to get it:
-                //UserIdProvider =  request => MyGetUserIdFunction(request),
-
-                // Optionally swap out the entire profiler provider, if you want
-                // The default handles async and works fine for almost all appliations
-                //ProfilerProvider = new MyProfilerProvider(),
-            });
 
             app.UseMvc(routes =>
             {

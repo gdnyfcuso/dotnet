@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Web;
 using System.Web.Routing;
 using StackExchange.Profiling.Helpers;
@@ -20,7 +17,7 @@ namespace StackExchange.Profiling
         /// <summary>
         /// Embedded resource contents keyed by filename.
         /// </summary>
-        private static readonly ConcurrentDictionary<string, string> ResourceCache = new ConcurrentDictionary<string, string>();
+        private readonly ConcurrentDictionary<string, string> ResourceCache = new ConcurrentDictionary<string, string>();
 
         /// <summary>
         /// Gets a value indicating whether to keep things static and reusable.
@@ -28,16 +25,42 @@ namespace StackExchange.Profiling
         public bool IsReusable => true;
 
         /// <summary>
+        /// The options this handler was created with.
+        /// </summary>
+        public MiniProfilerOptions Options { get; }
+
+        /// <summary>
         /// Usually called internally, sometimes you may clear the routes during the apps lifecycle, 
         /// if you do that call this to bring back mini profiler.
         /// </summary>
-        public static void RegisterRoutes()
+        /// <param name="options">The options to configure this handler with.</param>
+        public MiniProfilerHandler(MiniProfilerOptions options)
         {
-            var prefix = MiniProfiler.Settings.RouteBasePath.Replace("~/", string.Empty).EnsureTrailingSlash();
+            Options = options;
+        }
+
+        /// <summary>
+        /// Creates a MiniProfilerHandler and registers routes for it.
+        /// </summary>
+        /// <param name="options">The options to configure the handler with.</param>
+        /// <returns>The configured and registered handler.</returns>
+        public static MiniProfilerHandler Configure(MiniProfilerOptions options)
+        {
+            var handler = new MiniProfilerHandler(options);
+            handler.RegisterRoutes();
+            return handler;
+        }
+
+        /// <summary>
+        /// Registers the routes for this handler to handle.
+        /// </summary>
+        public void RegisterRoutes()
+        {
+            var prefix = Options.RouteBasePath.Replace("~/", string.Empty).EnsureTrailingSlash();
 
             using (RouteTable.Routes.GetWriteLock())
             {
-                var route = new Route(prefix + "{filename}", new MiniProfilerHandler())
+                var route = new Route(prefix + "{filename}", this)
                 {
                     // specify these, so no MVC route helpers will match, e.g. @Html.ActionLink("Home", "Index", "Home")
                     Defaults = new RouteValueDictionary(new { controller = nameof(MiniProfilerHandler), action = nameof(ProcessRequest) }),
@@ -87,7 +110,7 @@ namespace StackExchange.Profiling
                     break;
             }
 
-            if (MiniProfilerWebSettings.EnableCompression && output.HasValue())
+            if (Options.EnableCompression && output.HasValue())
             {
                 Compression.EncodeStreamAndAppendResponseHeaders(context.Request, context.Response);
             }
@@ -100,7 +123,7 @@ namespace StackExchange.Profiling
         /// </summary>
         /// <param name="context">The <see cref="HttpContext"/> being handled.</param>
         /// <param name="path">The path being requested.</param>
-        private static string Includes(HttpContext context, string path)
+        private string Includes(HttpContext context, string path)
         {
             var response = context.Response;
             switch (Path.GetExtension(path))
@@ -121,7 +144,7 @@ namespace StackExchange.Profiling
             return TryGetResource(Path.GetFileName(path), out string resource) ? resource : NotFound(context);
         }
 
-        private static string ResultsIndex(HttpContext context)
+        private string ResultsIndex(HttpContext context)
         {
             if (!AuthorizeRequest(context, isList: true, message: out string message))
             {
@@ -130,8 +153,8 @@ namespace StackExchange.Profiling
 
             context.Response.ContentType = "text/html";
 
-            var path = VirtualPathUtility.ToAbsolute(MiniProfiler.Settings.RouteBasePath).EnsureTrailingSlash();
-            var version = MiniProfiler.Settings.VersionHash;
+            var path = VirtualPathUtility.ToAbsolute(Options.RouteBasePath).EnsureTrailingSlash();
+            var version = Options.VersionHash;
             return $@"<html>
   <head>
     <title>List of profiling sessions</title>
@@ -148,13 +171,13 @@ namespace StackExchange.Profiling
         /// <param name="context">The <see cref="HttpContext"/> context for the request being authorixed.</param>
         /// <param name="isList">Whether this is a list route being accessed.</param>
         /// <param name="message">The access denied message, if present.</param>
-        private static bool AuthorizeRequest(HttpContext context, bool isList, out string message)
+        private bool AuthorizeRequest(HttpContext context, bool isList, out string message)
         {
             message = null;
-            var authorize = MiniProfilerWebSettings.ResultsAuthorize;
-            var authorizeList = MiniProfilerWebSettings.ResultsListAuthorize;
+            var authorize = Options.ResultsAuthorize;
+            var authorizeList = Options.ResultsListAuthorize;
 
-            if ((authorize != null && !authorize(context.Request)) || (isList && (authorizeList == null || !authorizeList(context.Request))))
+            if ((authorize?.Invoke(context.Request) == false) || (isList && (authorizeList?.Invoke(context.Request) == false)))
             {
                 context.Response.StatusCode = 401;
                 context.Response.ContentType = "text/plain";
@@ -165,13 +188,13 @@ namespace StackExchange.Profiling
             return true;
         }
 
-        private static string ResultsList(HttpContext context)
+        private string ResultsList(HttpContext context)
         {
             if (!AuthorizeRequest(context, isList: true, message: out string message))
             {
                 return message;
             }
-            var guids = MiniProfiler.Settings.Storage.List(100);
+            var guids = Options.Storage.List(100);
             var lastId = context.Request["last-id"];
 
             if (!lastId.IsNullOrWhiteSpace() && Guid.TryParse(lastId, out var lastGuid))
@@ -180,7 +203,7 @@ namespace StackExchange.Profiling
             }
 
             return guids.Reverse()
-                        .Select(g => MiniProfiler.Settings.Storage.Load(g))
+                        .Select(g => Options.Storage.Load(g))
                         .Where(p => p != null)
                         .Select(p => new
                         {
@@ -200,7 +223,7 @@ namespace StackExchange.Profiling
         /// identified by its <c>"?id=GUID"</c> on the query.
         /// </summary>
         /// <param name="context">The context to get a profiler response for.</param>
-        private static string GetSingleProfilerResult(HttpContext context)
+        private string GetSingleProfilerResult(HttpContext context)
         {
             // when we're rendering as a button/popup in the corner, we'll pass ?popup=1
             // if it's absent, we're rendering results as a full page for sharing
@@ -208,16 +231,16 @@ namespace StackExchange.Profiling
             // this guid is the MiniProfiler.Id property
             // if this guid is not supplied, the last set of results needs to be
             // displayed. The home page doesn't have profiling otherwise.
-            if (!Guid.TryParse(context.Request["id"], out var id) && MiniProfiler.Settings.Storage != null)
-                id = MiniProfiler.Settings.Storage.List(1).FirstOrDefault();
+            if (!Guid.TryParse(context.Request["id"], out var id) && Options.Storage != null)
+                id = Options.Storage.List(1).FirstOrDefault();
 
             if (id == default(Guid))
                 return isPopup ? NotFound(context) : NotFound(context, "text/plain", "No Guid id specified on the query string");
 
-            var profiler = MiniProfiler.Settings.Storage.Load(id);
-            string user = MiniProfilerWebSettings.UserProvider?.GetUser(context.Request);
+            var profiler = Options.Storage.Load(id);
+            string user = Options.UserIdProvider?.Invoke(context.Request);
 
-            MiniProfiler.Settings.Storage.SetViewed(user, id);
+            Options.Storage.SetViewed(user, id);
 
             if (profiler == null)
             {
@@ -242,7 +265,7 @@ namespace StackExchange.Profiling
 
             if (needsSave)
             {
-                MiniProfiler.Settings.Storage.Save(profiler);
+                Options.Storage.Save(profiler);
             }
 
             if (!AuthorizeRequest(context, isList: false, message: out string authorizeMessage))
@@ -260,17 +283,17 @@ namespace StackExchange.Profiling
             return profiler.ToJson();
         }
 
-        private static string ResultsFullPage(HttpContext context, MiniProfiler profiler)
+        private string ResultsFullPage(HttpContext context, MiniProfiler profiler)
         {
             context.Response.ContentType = "text/html";
-            return profiler.RenderResultsHtml(VirtualPathUtility.ToAbsolute(MiniProfiler.Settings.RouteBasePath).EnsureTrailingSlash());
+            return profiler.RenderResultsHtml(VirtualPathUtility.ToAbsolute(Options.RouteBasePath).EnsureTrailingSlash());
         }
 
 #if DEBUG
         private static bool BypassLocalLoad = false;
 #endif
 
-        private static bool TryGetResource(string filename, out string resource)
+        private bool TryGetResource(string filename, out string resource)
         {
             filename = filename.ToLower();
 
@@ -294,7 +317,7 @@ namespace StackExchange.Profiling
 
             if (!ResourceCache.TryGetValue(filename, out resource))
             {
-                string customTemplatesPath = HttpContext.Current.Server.MapPath(MiniProfilerWebSettings.CustomUITemplates);
+                string customTemplatesPath = HttpContext.Current.Server.MapPath(Options.CustomUITemplates);
                 string customTemplateFile = Path.Combine(customTemplatesPath, filename);
 
                 if (File.Exists(customTemplateFile))

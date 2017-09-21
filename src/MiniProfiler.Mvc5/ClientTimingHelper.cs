@@ -4,6 +4,7 @@ using System.Web.WebPages;
 
 namespace StackExchange.Profiling.Mvc
 {
+#pragma warning disable RCS1175 // Unused this parameter.
     /// <summary>
     /// Used to provide MVC-specific extensions for gathering <see cref="ClientTimingHelper"/> information.
     /// </summary>
@@ -21,7 +22,7 @@ namespace StackExchange.Profiling.Mvc
         /// </summary>
         /// <param name="page">Page being timed</param>
         /// <param name="name">Name of the script</param>
-        /// <param name="html">Html helper to render</param>
+        /// <param name="html">HTML helper to render</param>
         public static IHtmlString TimeScript(this WebPageBase page, string name, Func<object, HelperResult> html) =>
             new HtmlString(ClientTimingHelper.TimeScript(name, html(null).ToHtmlString()));
 
@@ -30,7 +31,7 @@ namespace StackExchange.Profiling.Mvc
         /// </summary>
         /// <param name="page">Page being timed</param>
         /// <param name="name">Name of the script</param>
-        /// <param name="html">Html to render</param>
+        /// <param name="html">HTML to render</param>
         public static IHtmlString TimeScript(this WebPageBase page, string name, IHtmlString html) =>
             new HtmlString(ClientTimingHelper.TimeScript(name, html.ToHtmlString()));
 
@@ -39,8 +40,9 @@ namespace StackExchange.Profiling.Mvc
         /// </summary>
         /// <param name="page">Page being timed</param>
         /// <param name="name">Name of the script</param>
-        /// <param name="html">Html to render</param>
+        /// <param name="html">HTML to render</param>
         public static IHtmlString TimeScript(this WebPageBase page, string name, string html) =>
             new HtmlString(ClientTimingHelper.TimeScript(name, html));
     }
+#pragma warning restore RCS1175 // Unused this parameter.
 }

@@ -16,13 +16,18 @@ namespace StackExchange.Profiling.Data
         private readonly bool _alwaysWrap;
 
         /// <summary>
+        /// The <see cref="DbProviderFactory"/> that this profiled version wraps.
+        /// </summary>
+        public DbProviderFactory InnerDbProviderFactory => _tail;
+
+        /// <summary>
         /// Every provider factory must have an Instance public field
         /// </summary>
         [SuppressMessage("StyleCop.CSharp.MaintainabilityRules", "SA1401:FieldsMustBePrivate", Justification = "This does not appear to be used anywhere, we need to refactor it.")]
         public readonly static ProfiledDbProviderFactory Instance = new ProfiledDbProviderFactory();
 
         /// <summary>
-        /// Initialises a new instance of the <see cref="ProfiledDbProviderFactory"/> class.
+        /// Initializes a new instance of the <see cref="ProfiledDbProviderFactory"/> class.
         /// A proxy provider factory
         /// </summary>
         /// <param name="tail">The provider factory to wrap.</param>
@@ -81,12 +86,12 @@ namespace StackExchange.Profiling.Data
         public override DbParameter CreateParameter() => _tail.CreateParameter();
 
         /// <summary>
-        /// Allow to re-initialise the provider factory.
+        /// Allow to re-initialize the provider factory.
         /// </summary>
         /// <param name="tail">The tail.</param>
         public void InitProfiledDbProviderFactory(DbProviderFactory tail) => _tail = tail;
 
-#if !NETSTANDARD1_5 // TODO: These are added back in netstandard1.7
+#if !NETSTANDARD1_5
         /// <summary>
         /// Specifies whether the specific <see cref="DbProviderFactory"/> supports the <see cref="DbDataSourceEnumerator"/> class.
         /// </summary>
@@ -113,10 +118,12 @@ namespace StackExchange.Profiling.Data
         /// <returns>A new instance of <see cref="DbDataSourceEnumerator"/>.</returns>
         public override DbDataSourceEnumerator CreateDataSourceEnumerator() => _tail.CreateDataSourceEnumerator();
 
+#if !NETSTANDARD2_0
         /// <summary>Returns a new instance of the provider's class that implements the provider's version of the <see cref="CodeAccessPermission"/> class.</summary>
         /// <param name="state">One of the <see cref="PermissionState"/> values.</param>
         /// <returns>A <see cref="CodeAccessPermission"/> object for the specified <see cref="PermissionState"/>.</returns>
         public override CodeAccessPermission CreatePermission(PermissionState state) => _tail.CreatePermission(state);
+#endif
 #endif
     }
 }

@@ -9,7 +9,7 @@ using StackExchange.Profiling;
 
 namespace Tests
 {
-    internal class MiniProfilerHandlerTests
+    public class MiniProfilerHandlerTests
     {
         [Theory]
         [InlineData("BRILLANT", 404)]
@@ -19,13 +19,12 @@ namespace Tests
         [InlineData("includes.css", 200)]
         public void GivenContext_WhenAResourceIsRequested_ThenTheCorrectHttpStatusCodeIsReturned(string resourceName, int expectedHttpStatus)
         {
-            // Arrange
-            var sut = new MiniProfilerHandler();
+            var sut = new MiniProfilerHandler(new MiniProfilerOptions()
+            {
+                ResultsListAuthorize = null
+            });
 
-            // Act
             var res = GetRequestResponseHttpStatus(sut, resourceName);
-
-            // Assert
             Assert.Equal(expectedHttpStatus, res);
         }
 
@@ -34,14 +33,12 @@ namespace Tests
         [InlineData(false, 401)]
         public void GivenContext_WhenIndexIsRequested_ThenTheCorrectHttpStatusCodeIsReturned(bool isRequestAuthorized, int expectedHttpStatus)
         {
-            // Arrange
-            var sut = new MiniProfilerHandler();
-            MiniProfilerWebSettings.ResultsListAuthorize = request => isRequestAuthorized;
+            var sut = new MiniProfilerHandler(new MiniProfilerOptions()
+            {
+                ResultsListAuthorize = request => isRequestAuthorized
+            });
 
-            // Act
             var res = GetRequestResponseHttpStatus(sut, "/results-index");
-
-            // Assert
             Assert.Equal(expectedHttpStatus, res);
         }
 
@@ -50,10 +47,10 @@ namespace Tests
 		[InlineData("deflate", typeof(DeflateStream))]
 		[InlineData("unknown", null)]
 		[InlineData("", null)]
-		public void GivenContext_WhenIndexIsRequested_ThenTheCorrectHttpStatusCodeIsReturned(string acceptEncoding, Type expectedEncodingFilterType)
+		public void GivenContext_WhenIndexIsRequested_ThenTheCorrectHttpStatusCodeIsReturnedType(string acceptEncoding, Type expectedEncodingFilterType)
 		{
 			// Arrange
-			var sut = new MiniProfilerHandler();
+			var sut = new MiniProfilerHandler(new MiniProfilerOptions());
 
 			// Act
 			var res = GetRequestResponseEncoding(sut, "includes.js", acceptEncoding);

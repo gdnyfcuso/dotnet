@@ -25,7 +25,7 @@ namespace StackExchange.Profiling.Data
         public IDbProfiler Profiler => _profiler;
 
         /// <summary>
-        /// Initialises a new instance of the <see cref="ProfiledDbConnection"/> class. 
+        /// Initializes a new instance of the <see cref="ProfiledDbConnection"/> class. 
         /// Returns a new <see cref="ProfiledDbConnection"/> that wraps <paramref name="connection"/>, 
         /// providing query execution profiling. If profiler is null, no profiling will occur.
         /// </summary>
@@ -107,7 +107,7 @@ namespace StackExchange.Profiling.Data
                 return;
             }
 
-            using (miniProfiler.CustomTiming("sql", "Connection Open()", "Open"))
+            using (miniProfiler.CustomTiming("sql", "Connection Open()", nameof(Open)))
             {
                 _connection.Open();
             }
@@ -122,13 +122,13 @@ namespace StackExchange.Profiling.Data
             var miniProfiler = _profiler as MiniProfiler;
             if (miniProfiler == null || !miniProfiler.IsActive)
             {
-                await _connection.OpenAsync(cancellationToken);
+                await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
                 return;
             }
 
-            using (miniProfiler.CustomTiming("sql", "Connection OpenAsync()", "OpenAsync"))
+            using (miniProfiler.CustomTiming("sql", "Connection OpenAsync()", nameof(OpenAsync)))
             {
-                await _connection.OpenAsync(cancellationToken);
+                await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -151,7 +151,7 @@ namespace StackExchange.Profiling.Data
         /// <summary>
         /// Dispose the underlying connection.
         /// </summary>
-        /// <param name="disposing">false if pre-empted from a <c>finalizer</c></param>
+        /// <param name="disposing">false if preempted from a <c>finalizer</c></param>
         protected override void Dispose(bool disposing)
         {
             if (disposing && _connection != null)
@@ -174,7 +174,7 @@ namespace StackExchange.Profiling.Data
             OnStateChange(stateChangeEventArguments);
         }
 
-#if !NETSTANDARD1_5 // TODO: Retuning in .Net Standard 2.0
+#if !NETSTANDARD1_5
         /// <summary>
         /// Gets a value indicating whether events can be raised.
         /// </summary>

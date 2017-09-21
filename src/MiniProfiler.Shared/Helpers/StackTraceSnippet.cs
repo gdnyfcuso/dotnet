@@ -1,6 +1,6 @@
-﻿using System.Diagnostics;
+﻿using StackExchange.Profiling.Internal;
+using System.Diagnostics;
 using System.Reflection;
-using System.Text;
 
 namespace StackExchange.Profiling.Helpers
 {
@@ -9,69 +9,85 @@ namespace StackExchange.Profiling.Helpers
     /// </summary>
     public static class StackTraceSnippet
     {
-        // TODO: Uhhhhhhh, this isn't gonna work. Let's come back to this. Oh and async. Dammit.
-        private const string AspNetEntryPointMethodName = "System.Web.HttpApplication.IExecutionStep.Execute";
-
         /// <summary>
         /// Gets the current formatted and filtered stack trace.
         /// </summary>
+        /// <param name="options">The options to use for this StackTrace fetch.</param>
         /// <returns>Space separated list of methods</returns>
-        public static string Get()
+        public static string Get(MiniProfilerBaseOptions options)
         {
-#if !NETSTANDARD1_5
-            var frames = new StackTrace().GetFrames();
-#else // TODO: Make this work in .NET Standard, true fix isn't until 2.0 via https://github.com/dotnet/corefx/pull/12527
-            StackFrame[] frames = null;
-#endif
-            if (frames == null || MiniProfiler.Settings.StackMaxLength <= 0)
+            if (options.StackMaxLength <= 0)
             {
                 return string.Empty;
             }
 
-            var sb = new StringBuilder();
-            int stackLength = -1; // Starts on -1 instead of zero to compensate for adding 1 first time
-
-            foreach (StackFrame t in frames)
+            bool ShouldExcludeType(MethodBase method)
             {
-                var method = t.GetMethod();
-
-                // no need to continue up the chain
-                if (method.Name == AspNetEntryPointMethodName)
-                    break;
-
-                if (stackLength >= MiniProfiler.Settings.StackMaxLength)
-                    break;
-
-                var assembly = method.Module.Assembly.GetName().Name;
-                if (!ShouldExcludeType(method)
-                    && !MiniProfiler.Settings.AssembliesToExclude.Contains(assembly)
-                    && !MiniProfiler.Settings.MethodsToExclude.Contains(method.Name))
+                var t = method.DeclaringType;
+                while (t != null)
                 {
-                    if (sb.Length > 0)
-                    {
-                        sb.Append(' ');
-                    }
-                    sb.Append(method.Name);
-                    stackLength += method.Name.Length + 1; // 1 added for spaces.
+                    if (options.ExcludedTypes.Contains(t.Name))
+                        return true;
+
+                    t = t.DeclaringType;
+                }
+                return false;
+            }
+
+#if !NETSTANDARD1_5
+            var frames = new StackTrace().GetFrames();
+#else // The above works in netstandard2.0 via https://github.com/dotnet/corefx/pull/12527
+            StackFrame[] frames = null;
+#endif
+
+            if (frames == null)
+            {
+                return string.Empty;
+            }
+
+            var sb = StringBuilderCache.Get();
+            int stackLength = 0,
+                startFrame = frames.Length - 1;
+
+            for (int i = 0; i < frames.Length; i++)
+            {
+                var method = frames[i].GetMethod();
+                if (stackLength >= options.StackMaxLength
+                    // ASP.NET: no need to continue up the chain
+                    || method.Name == "System.Web.HttpApplication.IExecutionStep.Execute"
+                    || (method.Module.Name == "Microsoft.AspNetCore.Mvc.Core.dll" && method.DeclaringType.Name == "ObjectMethodExecutor"))
+                {
+                    frames[i] = null;
+                    startFrame = i < 0 ? 0 : i - 1;
+                    break;
+                }
+                else if (ShouldExcludeType(method)
+                    || options.ExcludedAssemblies.Contains(method.Module.Assembly.GetName().Name)
+                    || options.ExcludedMethods.Contains(method.Name))
+                {
+                    frames[i] = null;
+                }
+                else
+                {
+                    stackLength += (stackLength > 0 ? 3 : 0) + method.Name.Length;
                 }
             }
 
-            return sb.ToString();
-        }
-
-        private static bool ShouldExcludeType(MethodBase method)
-        {
-            var t = method.DeclaringType;
-
-            while (t != null)
+            for (var i = startFrame; i >= 0; i--)
             {
-                if (MiniProfiler.Settings.TypesToExclude.Contains(t.Name))
-                    return true;
-
-                t = t.DeclaringType;
+                var f = frames[i];
+                if (f != null)
+                {
+                    var method = f.GetMethod();
+                    if (sb.Length > 0)
+                    {
+                        sb.Append(" > ");
+                    }
+                    sb.Append(method.Name);
+                }
             }
 
-            return false;
+            return sb.ToStringRecycle();
         }
     }
 }

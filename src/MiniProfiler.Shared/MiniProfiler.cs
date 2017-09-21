@@ -16,26 +16,37 @@ namespace StackExchange.Profiling
     public partial class MiniProfiler
     {
         /// <summary>
-        /// Initialises a new instance of the <see cref="MiniProfiler"/> class. 
+        /// The options this profiler uses, assigned at creation time.
+        /// </summary>
+        [IgnoreDataMember]
+        public MiniProfilerBaseOptions Options { get; }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="MiniProfiler"/> class. 
         /// Obsolete - used for serialization.
         /// </summary>
         [Obsolete("Used for serialization")]
         public MiniProfiler() { /* serialization only */ }
 
         /// <summary>
-        /// Initialises a new instance of the <see cref="MiniProfiler"/> class.  Creates and starts a new MiniProfiler 
+        /// Initializes a new instance of the <see cref="MiniProfiler"/> class.  Creates and starts a new MiniProfiler 
         /// for the root <paramref name="name"/>.
         /// </summary>
         /// <param name="name">The name of this <see cref="MiniProfiler"/>, typically a URL.</param>
-        public MiniProfiler(string name)
+        /// <param name="options">The options to use for this MiniProfiler.</param>
+        public MiniProfiler(string name, MiniProfilerBaseOptions options)
         {
+            Name = name;
             Id = Guid.NewGuid();
             MachineName = Environment.MachineName;
             Started = DateTime.UtcNow;
+            Options = options ?? throw new ArgumentNullException(nameof(options));
+            Storage = options.Storage;
 
             // stopwatch must start before any child Timings are instantiated
-            Stopwatch = Settings.StopwatchProvider();
+            Stopwatch = options.StopwatchProvider();
             Root = new Timing(this, null, name);
+            IsActive = true;
         }
 
         /// <summary>
@@ -85,7 +96,7 @@ namespace StackExchange.Profiling
         public Dictionary<string, string> CustomLinks { get; set; }
 
         /// <summary>
-        /// Json used to store Custom Links. Do not touch.
+        /// JSON used to store Custom Links. Do not touch.
         /// </summary>
         public string CustomLinksJson
         {
@@ -136,7 +147,7 @@ namespace StackExchange.Profiling
         /// Gets or sets a string identifying the user/client that is profiling this request.
         /// </summary>
         /// <remarks>
-        /// If this is not set manually at some point, the IUserProvider implementation will be used;
+        /// If this is not set manually at some point, the UserIdProvider implementation will be used;
         /// by default, this will be the current request's IP address.
         /// </remarks>
         [DataMember(Order = 9)]
@@ -146,7 +157,7 @@ namespace StackExchange.Profiling
         /// Returns true when this MiniProfiler has been viewed by the <see cref="User"/> that recorded it.
         /// </summary>
         /// <remarks>
-        /// Allows POSTs that result in a redirect to be profiled. <see cref="MiniProfiler.Settings.Storage"/> implementation
+        /// Allows POSTs that result in a redirect to be profiled. <see cref="MiniProfilerBaseOptions.Storage"/> implementation
         /// will keep a list of all profilers that haven't been fetched down.
         /// </remarks>
         [DataMember(Order = 10)]
@@ -178,69 +189,80 @@ namespace StackExchange.Profiling
         internal IStopwatch Stopwatch { get; set; }
 
         /// <summary>
-        /// Gets the currently running MiniProfiler for the current HttpContext; null if no MiniProfiler was <see cref="Start(string)"/>ed.
+        /// Gets the internal timer for this MiniProfile, primarily for unit testing.
         /// </summary>
-        public static MiniProfiler Current => Settings.ProfilerProvider.GetCurrentProfiler();
+        public IStopwatch GetStopwatch() => Stopwatch;
 
         /// <summary>
-        /// A <see cref="IAsyncStorage"/> strategy to use for the current profiler. 
-        /// If null, then the <see cref="IAsyncStorage"/> set in <see cref="Settings.Storage"/> will be used.
+        /// Gets the currently running MiniProfiler for the current HttpContext; null if no MiniProfiler was started.
+        /// </summary>
+        public static MiniProfiler Current => MiniProfilerBaseOptions.CurrentProfilerProvider?.CurrentProfiler;
+
+        /// <summary>
+        /// A <see cref="IAsyncStorage"/> strategy to use for the current profiler.
         /// </summary>
         /// <remarks>Used to set custom storage for an individual request</remarks>
         [IgnoreDataMember]
         public IAsyncStorage Storage { get; set; }
 
         /// <summary>
-        /// Starts a new MiniProfiler based on the current <see cref="IAsyncProfilerProvider"/>. This new profiler can be accessed by
-        /// <see cref="Current"/>.
-        /// </summary>
-        /// <param name="sessionName">
-        /// Allows explicit naming of the new profiling session; when null, an appropriate default will be used, e.g. for
-        /// a web request, the url will be used for the overall session name.
-        /// </param>
-        public static MiniProfiler Start(string sessionName = null) =>
-            Settings.ProfilerProvider.Start(sessionName);
-
-        // Unit test hook
-        internal static MiniProfiler Start(string sessionName, IAsyncProfilerProvider provider) =>
-            provider.Start(sessionName);
-
-        /// <summary>
         /// Ends the current profiling session, if one exists.
         /// </summary>
         /// <param name="discardResults">
-        /// When true, clears the <see cref="MiniProfiler.Current"/>, allowing profiling to 
+        /// When true, clears the <see cref="Current"/>, allowing profiling to 
         /// be prematurely stopped and discarded. Useful for when a specific route does not need to be profiled.
         /// </param>
-        public static void Stop(bool discardResults = false) =>
-            Settings.ProfilerProvider.Stop(discardResults);
-
-        // Unit test hook
-        internal static void Stop(bool discardResults, IAsyncProfilerProvider provider) =>
-            provider.Stop(discardResults);
+        public bool Stop(bool discardResults = false)
+        {
+            if (!InnerStop())
+            {
+                return false;
+            }
+            Options.ProfilerProvider.Stopped(this, discardResults);
+            return true;
+        }
 
         /// <summary>
         /// Asynchronously ends the current profiling session, if one exists. 
-        /// This invokves async saving all the way down if th providers support it.
+        /// This invokes async saving all the way down if th providers support it.
         /// </summary>
         /// <param name="discardResults">
-        /// When true, clears the <see cref="MiniProfiler.Current"/>, allowing profiling to 
+        /// When true, clears the <see cref="Current"/>, allowing profiling to 
         /// be prematurely stopped and discarded. Useful for when a specific route does not need to be profiled.
         /// </param>
-        public static Task StopAsync(bool discardResults = false) =>
-            Settings.ProfilerProvider.StopAsync(discardResults);
-
-        // Unit test hook
-        internal static Task StopAsync(bool discardResults, IAsyncProfilerProvider provider) =>
-            provider.StopAsync(discardResults);
+        public async Task<bool> StopAsync(bool discardResults = false)
+        {
+            if (!InnerStop())
+            {
+                return false;
+            }
+            await Options.ProfilerProvider.StoppedAsync(this, discardResults).ConfigureAwait(false);
+            return true;
+        }
 
         /// <summary>
-        /// Returns an <see cref="IDisposable"/> that will time the code between its creation and disposal. Use this method when you
-        /// do not wish to include the StackExchange.Profiling namespace for the <see cref="MiniProfilerExtensions.Step(MiniProfiler,string)"/> extension method.
+        /// Shared stop bits for <see cref="Stop(bool)"/> and <see cref="StopAsync(bool)"/>
         /// </summary>
-        /// <param name="name">A descriptive name for the code that is encapsulated by the resulting IDisposable's lifetime.</param>
-        /// <returns>the static step.</returns>
-        public static IDisposable StepStatic(string name) => Current.Step(name);
+        /// <returns></returns>
+        private bool InnerStop()
+        {
+            if (!Stopwatch.IsRunning)
+            {
+                return false;
+            }
+
+            Stopwatch.Stop();
+            DurationMilliseconds = GetRoundedMilliseconds(ElapsedTicks);
+
+            foreach (var timing in GetTimingHierarchy())
+            {
+                timing.Stop();
+            }
+
+            IsActive = false;
+
+            return true;
+        }
 
         /// <summary>
         /// Deserializes the JSON string parameter to a <see cref="MiniProfiler"/>.
@@ -288,13 +310,18 @@ namespace StackExchange.Profiling
             }
         }
 
-#if !NETSTANDARD1_5 // TODO: Revisit in .NET Standard 2.0
+#if !NETSTANDARD1_5
         /// <summary>
         /// Create a DEEP clone of this MiniProfiler.
         /// </summary>
         public MiniProfiler Clone()
         {
-            var serializer = new DataContractSerializer(typeof(MiniProfiler), null, int.MaxValue, false, true, null);
+            var serializer = new DataContractSerializer(typeof(MiniProfiler), new DataContractSerializerSettings
+            {
+                MaxItemsInObjectGraph = int.MaxValue,
+                IgnoreExtensionDataObject = false,
+                PreserveObjectReferences = true
+            });
             using (var ms = new System.IO.MemoryStream())
             {
                 serializer.WriteObject(ms, this);
@@ -307,24 +334,6 @@ namespace StackExchange.Profiling
         internal Timing StepImpl(string name, decimal? minSaveMs = null, bool? includeChildrenWithMinSave = false)
         {
             return new Timing(this, Head, name, minSaveMs, includeChildrenWithMinSave);
-        }
-
-        internal IDisposable IgnoreImpl() => new Suppression(this);
-
-        internal bool StopImpl()
-        {
-            if (!Stopwatch.IsRunning)
-                return false;
-
-            Stopwatch.Stop();
-            DurationMilliseconds = GetRoundedMilliseconds(ElapsedTicks);
-
-            foreach (var timing in GetTimingHierarchy())
-            {
-                timing.Stop();
-            }
-
-            return true;
         }
 
         /// <summary>

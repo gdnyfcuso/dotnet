@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Data;
 using System.Text.RegularExpressions;
-using StackExchange.Profiling.Helpers;
+using StackExchange.Profiling.Internal;
 
 namespace StackExchange.Profiling.SqlFormatters
 {
@@ -10,11 +9,11 @@ namespace StackExchange.Profiling.SqlFormatters
     /// </summary>
     public class InlineFormatter : ISqlFormatter
     {
-        private static readonly Regex ParamPrefixes = new Regex(@"[@:?].+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex ParamPrefixes = new Regex("[@:?].+", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static bool includeTypeInfo;
 
         /// <summary>
-        /// Creates a new Inline SQL Formatter, optionally including the parameter type info 
+        /// Creates a new <see cref="InlineFormatter"/>, optionally including the parameter type info 
         /// in comments beside the replaced value
         /// </summary>
         /// <param name="includeTypeInfo">Whether to include a comment after the value, indicating the type, e.g. <c>/* @myParam DbType.Int32 */</c></param>

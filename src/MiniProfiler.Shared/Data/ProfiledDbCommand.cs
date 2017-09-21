@@ -44,7 +44,7 @@ namespace StackExchange.Profiling.Data
         }
 
         /// <summary>
-        /// Initialises a new instance of the <see cref="ProfiledDbCommand"/> class.
+        /// Initializes a new instance of the <see cref="ProfiledDbCommand"/> class.
         /// </summary>
         /// <param name="command">The command.</param>
         /// <param name="connection">The connection.</param>
@@ -75,7 +75,7 @@ namespace StackExchange.Profiling.Data
             }
 
             var prop = commandType
-#if NETSTANDARD1_5 // TODO: Revisit in .NET Standard 2.0
+#if NETSTANDARD1_5
                 .GetTypeInfo()
 #endif
                 .GetProperty("BindByName", BindingFlags.Public | BindingFlags.Instance);
