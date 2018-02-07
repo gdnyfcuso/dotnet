@@ -1,27 +1,19 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using StackExchange.Profiling;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Tests.Async
+namespace StackExchange.Profiling.Tests.Async
 {
-    [CollectionDefinition(BaseTest.NonParallel, DisableParallelization = true)]
-    public static class NonParallelDefintion
-    {
-        public const string Name = "NonParallel";
-    }
-
     [Collection(NonParallel)]
     public class AsyncTests : BaseTest
     {
         public AsyncTests(ITestOutputHelper output) : base(output)
         {
-            Options.SetProvider(new DefaultProfilerProvider());
+            Options.ProfilerProvider = new DefaultProfilerProvider();
         }
 
         [Fact]
@@ -141,8 +133,7 @@ namespace Tests.Async
                 }, TaskCreationOptions.LongRunning)
             );
 
-            Func<List<CountdownEvent>, bool> hasPendingTasks =
-                handlers2 => (handlers2.Count == 0) || handlers2.Any(y => !y.IsSet);
+            bool hasPendingTasks(List<CountdownEvent> handlers2) => (handlers2.Count == 0) || handlers2.Any(y => !y.IsSet);
 
             // TODO Make this a thread safe signaling lock step to avoid sleeping
             // Wait for tasks to run and call their Step() methods

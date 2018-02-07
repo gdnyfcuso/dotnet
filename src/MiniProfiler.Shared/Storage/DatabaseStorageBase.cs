@@ -9,8 +9,21 @@ namespace StackExchange.Profiling.Storage
     /// <summary>
     /// Understands how to save MiniProfiler results to a MSSQL database, allowing more permanent storage and querying of slow results.
     /// </summary>
-    public abstract class DatabaseStorageBase : IAsyncStorage
+    public abstract class DatabaseStorageBase : IAsyncStorage, IDatabaseStorageConnectable
     {
+        /// <summary>
+        /// The table <see cref="MiniProfiler"/>s are stored in.
+        /// </summary>
+        public readonly string MiniProfilersTable = "MiniProfilers";
+        /// <summary>
+        /// The table <see cref="Timing"/>s are stored in.
+        /// </summary>
+        public readonly string MiniProfilerTimingsTable = "MiniProfilerTimings";
+        /// <summary>
+        /// The table <see cref="ClientTiming"/>s are stored in.
+        /// </summary>
+        public readonly string MiniProfilerClientTimingsTable = "MiniProfilerClientTimings";
+
         /// <summary>
         /// Gets or sets how we connect to the database used to save/load MiniProfiler results.
         /// </summary>
@@ -24,6 +37,22 @@ namespace StackExchange.Profiling.Storage
         protected DatabaseStorageBase(string connectionString)
         {
             ConnectionString = connectionString;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="DatabaseStorageBase"/> class. 
+        /// Returns a new <c>SqlServerDatabaseStorage</c> object that will insert into the database identified by connectionString.
+        /// </summary>
+        /// <param name="connectionString">The connection String</param>
+        /// <param name="profilersTable">The table name to use for MiniProfilers.</param>
+        /// <param name="timingsTable">The table name to use for MiniProfiler Timings.</param>
+        /// <param name="clientTimingsTable">The table name to use for MiniProfiler Client Timings.</param>
+        protected DatabaseStorageBase(string connectionString, string profilersTable, string timingsTable, string clientTimingsTable)
+        {
+            ConnectionString = connectionString;
+            MiniProfilersTable = profilersTable;
+            MiniProfilerTimingsTable = clientTimingsTable;
+            MiniProfilerClientTimingsTable = timingsTable;
         }
 
         /// <summary>
@@ -107,29 +136,29 @@ namespace StackExchange.Profiling.Storage
         /// <summary>
         /// Returns the MiniProfiler Ids for the given search criteria.
         /// </summary>
-        /// <param name="maxResults">The max number of results</param>
-        /// <param name="start">Search window start</param>
-        /// <param name="finish">Search window end</param>
-        /// <param name="orderBy">Result order</param>
-        /// <returns>The list of GUID keys</returns>
+        /// <param name="maxResults">The max number of results.</param>
+        /// <param name="start">Search window start.</param>
+        /// <param name="finish">Search window end.</param>
+        /// <param name="orderBy">Result order.</param>
+        /// <returns>The list of GUID keys.</returns>
         public abstract IEnumerable<Guid> List(int maxResults, DateTime? start = null, DateTime? finish = null, ListResultsOrder orderBy = ListResultsOrder.Descending);
 
         /// <summary>
         /// Asynchronously returns the MiniProfiler Ids for the given search criteria.
         /// </summary>
-        /// <param name="maxResults">The max number of results</param>
-        /// <param name="start">Search window start</param>
-        /// <param name="finish">Search window end</param>
-        /// <param name="orderBy">Result order</param>
-        /// <returns>The list of GUID keys</returns>
+        /// <param name="maxResults">The max number of results.</param>
+        /// <param name="start">Search window start.</param>
+        /// <param name="finish">Search window end.</param>
+        /// <param name="orderBy">Result order.</param>
+        /// <returns>The list of GUID keys.</returns>
         public abstract Task<IEnumerable<Guid>> ListAsync(int maxResults, DateTime? start = null, DateTime? finish = null, ListResultsOrder orderBy = ListResultsOrder.Descending);
 
         /// <summary>
         /// Connects timings from the database, shared here for use in multiple providers.
         /// </summary>
-        /// <param name="profiler">The profiler to connect the timing tree to</param>
-        /// <param name="timings">The raw list of Timings to construct the tree from</param>
-        /// <param name="clientTimings">The client timings to connect to the profiler</param>
+        /// <param name="profiler">The profiler to connect the timing tree to.</param>
+        /// <param name="timings">The raw list of Timings to construct the tree from.</param>
+        /// <param name="clientTimings">The client timings to connect to the profiler.</param>
         protected void ConnectTimings(MiniProfiler profiler, List<Timing> timings, List<ClientTiming> clientTimings)
         {
             if (profiler?.RootTimingId.HasValue == true && timings.Count > 0)
@@ -161,8 +190,8 @@ namespace StackExchange.Profiling.Storage
         /// Build the subtree of <see cref="Timing"/> objects with <paramref name="parent"/> at the top.
         /// Used recursively.
         /// </summary>
-        /// <param name="parent">Parent <see cref="Timing"/> to be evaluated</param>
-        /// <param name="timingsLookupByParent">Key: parent timing Id; Value: collection of all <see cref="Timing"/> objects under the given parent</param>
+        /// <param name="parent">Parent <see cref="Timing"/> to be evaluated.</param>
+        /// <param name="timingsLookupByParent">Key: parent timing Id; Value: collection of all <see cref="Timing"/> objects under the given parent.</param>
         private void PopulateChildTimings(Timing parent, ILookup<Guid, Timing> timingsLookupByParent)
         {
             if (timingsLookupByParent.Contains(parent.Id))
@@ -191,5 +220,34 @@ namespace StackExchange.Profiling.Storage
                 }
             }
         }
+
+        private List<string> _tableCreationScripts;
+        /// <summary>
+        /// The table creation scripts for this database storage.
+        /// Generated by the <see cref="GetTableCreationScripts"/> implemented by the provider.
+        /// </summary>
+        public List<string> TableCreationScripts => _tableCreationScripts ?? (_tableCreationScripts = GetTableCreationScripts().ToList());
+
+        /// <summary>
+        /// Creates needed tables. Run this once on your database.
+        /// </summary>
+        /// <remarks>
+        /// Works in SQL server and <c>sqlite</c> (with documented removals).
+        /// </remarks>
+        protected abstract IEnumerable<string> GetTableCreationScripts();
+
+        DbConnection IDatabaseStorageConnectable.GetConnection() => GetConnection();
+    }
+
+    /// <summary>
+    /// Interface for accessing the <see cref="DatabaseStorageBase"/>'s connection, for testing.
+    /// </summary>
+    public interface IDatabaseStorageConnectable
+    {
+        /// <summary>
+        /// Gets the connection for a <see cref="IDatabaseStorageConnectable"/> for testing.
+        /// </summary>
+        /// <returns>The connection for this storage.</returns>
+        DbConnection GetConnection();
     }
 }

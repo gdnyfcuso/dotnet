@@ -173,6 +173,10 @@ namespace StackExchange.Profiling.Storage
                     }
                 }
             }
+            if (!profiler.HasUserViewed)
+            {
+                SetUnviewed(profiler.User, profiler.Id);
+            }
         }
 
         /// <summary>
@@ -183,10 +187,8 @@ namespace StackExchange.Profiling.Storage
         public Task SaveAsync(MiniProfiler profiler)
         {
             Save(profiler);
-            return Polyfills.CompletedTask;
+            return Task.CompletedTask;
         }
-
-        bool IAsyncStorage.SetUnviewedAfterSave => true;
 
         /// <summary>
         /// Set the profile to unviewed for this user
@@ -215,7 +217,7 @@ namespace StackExchange.Profiling.Storage
         public Task SetUnviewedAsync(string user, Guid id)
         {
             SetUnviewed(user, id);
-            return Polyfills.CompletedTask;
+            return Task.CompletedTask;
         }
 
         /// <summary>
@@ -240,7 +242,7 @@ namespace StackExchange.Profiling.Storage
         public Task SetViewedAsync(string user, Guid id)
         {
             SetViewed(user, id);
-            return Polyfills.CompletedTask;
+            return Task.CompletedTask;
         }
     }
 }

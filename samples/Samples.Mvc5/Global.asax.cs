@@ -1,6 +1,5 @@
 ﻿using System;
 using System.IO;
-using System.Linq;
 using System.Web;
 using System.Web.Mvc;
 using System.Web.Optimization;
@@ -11,23 +10,24 @@ using StackExchange.Profiling.EntityFramework6;
 using StackExchange.Profiling.Mvc;
 using StackExchange.Profiling.Storage;
 using Samples.Mvc5.Helpers;
+using System.Data.SQLite;
 
 namespace Samples.Mvc5
 {
     public class MvcApplication : HttpApplication
     {
-        private static MiniProfilerOptions ProfilerOptions;
-
         /// <summary>
         /// Gets the connection string.
         /// </summary>
-        public static string ConnectionString =>
-            "Data Source = " + HttpContext.Current.Server.MapPath("~/App_Data/TestMiniProfiler.sqlite");
+        public static string ConnectionString => "FullUri=file::memory:?cache=shared";
+        private static readonly SQLiteConnection TrapConnection = new SQLiteConnection(ConnectionString);
 
         protected void Application_Start()
         {
+            TrapConnection.Open(); //Hold the in-memory SQLite database open
+
             AreaRegistration.RegisterAllAreas();
-            // Note: ProfilingActionFilter is add in the FilterConfig
+            // Note: ProfilingActionFilter is added in the FilterConfig
             FilterConfig.RegisterGlobalFilters(GlobalFilters.Filters);
             RouteConfig.RegisterRoutes(RouteTable.Routes);
             BundleConfig.RegisterBundles(BundleTable.Bundles);
@@ -38,14 +38,6 @@ namespace Samples.Mvc5
             if (File.Exists(entityFrameworkDataPath))
             {
                 File.Delete(entityFrameworkDataPath);
-            }
-
-            // initialize automatic view profiling
-            var copy = ViewEngines.Engines.ToList();
-            ViewEngines.Engines.Clear();
-            foreach (var item in copy)
-            {
-                ViewEngines.Engines.Add(new ProfilingViewEngine(item));
             }
         }
 
@@ -63,7 +55,7 @@ namespace Samples.Mvc5
             // profile only for local requests (seems reasonable)
             if (Request.IsLocal)
             {
-                profiler = ProfilerOptions.StartProfiler();
+                profiler = MiniProfiler.StartNew();
             }
 
             using (profiler.Step("Application_BeginRequest"))
@@ -94,10 +86,10 @@ namespace Samples.Mvc5
             // by default, however, long-term result caching is done in HttpRuntime.Cache, which is very volatile.
             // 
             // Let's rig up serialization of our profiler results to a database, so they survive app restarts.
-            var options = ProfilerOptions = new MiniProfilerOptions
+            MiniProfiler.Configure(new MiniProfilerOptions
             {
-                // Sets up the WebRequestProfilerProvider with
-                // ~/profiler as the route path to use (e.g. /profiler/mini-profiler-includes.js)
+                // Sets up the route to use for MiniProfiler resources:
+                // Here, ~/profiler is used for things like /profiler/mini-profiler-includes.js)
                 RouteBasePath = "~/profiler",
 
                 // Setting up a MultiStorage provider. This will store results in the MemoryCacheStorage (normally the default) and in SqlLite as well.
@@ -115,15 +107,15 @@ namespace Samples.Mvc5
                 // override the application-wide defaults specified here, for example if you had both:
                 //    PopupRenderPosition = RenderPosition.Right;
                 //    and in the page:
-                //    @MiniProfiler.RenderIncludes(position: RenderPosition.Left)
-                // ...then the position would be on the left that that page, and on the right (the app default) for anywhere that doesn't
+                //    @MiniProfiler.Current.RenderIncludes(position: RenderPosition.Left)
+                // ...then the position would be on the left on that page, and on the right (the application default) for anywhere that doesn't
                 // specified position in the .RenderIncludes() call.
                 PopupRenderPosition = RenderPosition.Right,  // defaults to left
                 PopupMaxTracesToShow = 10,                   // defaults to 15
 
                 // ResultsAuthorize (optional - open to all by default):
                 // because profiler results can contain sensitive data (e.g. sql queries with parameter values displayed), we
-                // can define a function that will authorize clients to see the json or full page results.
+                // can define a function that will authorize clients to see the JSON or full page results.
                 // we use it on http://stackoverflow.com to check that the request cookies belong to a valid developer.
                 ResultsAuthorize = request =>
                 {
@@ -132,7 +124,7 @@ namespace Samples.Mvc5
                     // for example, for this specific path, we'll only allow profiling if a query parameter is set
                     if ("/Home/ResultsAuthorization".Equals(request.Url.LocalPath, StringComparison.OrdinalIgnoreCase))
                     {
-                        return (request.Url.Query).ToLower().Contains("isauthorized");
+                        return (request.Url.Query).IndexOf("isauthorized", StringComparison.OrdinalIgnoreCase) >= 0;
                     }
 
                     // all other paths can check our global switch
@@ -153,9 +145,10 @@ namespace Samples.Mvc5
             // Optional settings to control the stack trace output in the details pane
             .ExcludeType("SessionFactory")  // Ignore any class with the name of SessionFactory)
             .ExcludeAssembly("NHibernate")  // Ignore any assembly named NHibernate
-            .ExcludeMethod("Flush");        // Ignore any method with the name of Flush
+            .ExcludeMethod("Flush")         // Ignore any method with the name of Flush
+            .AddViewPofiling()              // Add MVC view profiling
+            );
 
-            MiniProfilerHandler.Configure(options);
             MiniProfilerEF6.Initialize();
         }
     }

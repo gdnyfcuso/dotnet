@@ -1,11 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 
 using Dapper;
 using StackExchange.Profiling.Storage;
+using System.Data.SQLite;
 
 namespace Samples.Mvc5.Helpers
 {
@@ -15,7 +15,7 @@ namespace Samples.Mvc5.Helpers
     public class SqliteMiniProfilerStorage : SqlServerStorage
     {
         /// <summary>
-        /// Initialises a new instance of the <see cref="SqliteMiniProfilerStorage"/> class.
+        /// Initializes a new instance of the <see cref="SqliteMiniProfilerStorage"/> class.
         /// </summary>
         /// <param name="connectionString">The connection string.</param>
         public SqliteMiniProfilerStorage(string connectionString) : base(connectionString)
@@ -27,7 +27,7 @@ namespace Samples.Mvc5.Helpers
         /// </summary>
         /// <returns>The Abstracted Connection</returns>
         protected override System.Data.Common.DbConnection GetConnection() =>
-            new System.Data.SQLite.SQLiteConnection(ConnectionString);
+            new SQLiteConnection(ConnectionString);
 
         /// <summary>
         /// Used for testing purposes - destroys and recreates the SQLITE file with needed tables.
@@ -35,24 +35,14 @@ namespace Samples.Mvc5.Helpers
         /// <param name="extraTablesToCreate">The Extra Tables To Create.</param>
         public SqliteMiniProfilerStorage RecreateDatabase(params string[] extraTablesToCreate)
         {
-            var path = ConnectionString.Replace("Data Source = ", string.Empty); // hacky
-
-            if (File.Exists(path))
+            using (var cnn = GetConnection())
             {
-                File.Delete(path);
-            }
-
-            using (var cnn = new System.Data.SQLite.SQLiteConnection(MvcApplication.ConnectionString))
-            {
-                cnn.Open();
-
-                // we need some tiny mods to allow sqlite support 
+                // We need some tiny mods to allow SQLite support 
                 foreach (var sql in TableCreationScripts.Union(extraTablesToCreate))
                 {
                     cnn.Execute(sql);
                 }
             }
-
             return this;
         }
 
@@ -93,8 +83,9 @@ Select Id
             }
         }
 
-        private static readonly List<string> TableCreationScripts = new  List<string>{@"
-                CREATE TABLE MiniProfilers
+        protected override IEnumerable<string> GetTableCreationScripts()
+        {
+            yield return @"CREATE TABLE MiniProfilers
                   (
                      RowId                                integer not null primary key,
                      Id                                   uniqueidentifier not null, 
@@ -107,8 +98,8 @@ Select Id
                      MachineName                          nvarchar(100) null,
                      CustomLinksJson                      text null,
                      ClientTimingsRedirectCount           int null
-                  );",
-                     @"create table MiniProfilerTimings
+                  );";
+            yield return @"CREATE TABLE MiniProfilerTimings
                   (
                      RowId                               integer not null primary key,
                      Id                                  uniqueidentifier not null,
@@ -120,8 +111,8 @@ Select Id
                      IsRoot                              bit not null,
                      Depth                               smallint not null,
                      CustomTimingsJson                   text null
-                  );",
-                     @" create table MiniProfilerClientTimings
+                  );";
+            yield return @"CREATE TABLE MiniProfilerClientTimings
                   (
                      RowId                               integer not null primary key,
                      Id                                  uniqueidentifier not null,
@@ -129,6 +120,7 @@ Select Id
                      Name                                nvarchar(200) not null,
                      Start                               decimal(9, 3) not null,
                      Duration                            decimal(9, 3) not null
-                  );"};
+                  );";
+        }
     }
 }

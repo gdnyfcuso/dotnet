@@ -2,13 +2,15 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SqlClient;
-using System.Transactions;
 
 using StackExchange.Profiling.Internal;
 using StackExchange.Profiling.SqlFormatters;
 using Xunit;
+#if NET461
+using System.Transactions;
+#endif
 
-namespace Tests
+namespace StackExchange.Profiling.Tests
 {
     public class SqlFormatterTests
     {
@@ -107,6 +109,20 @@ namespace Tests
         }
 
         [Fact]
+        public void InlineParameterNamesInParameterValues()
+        {
+            var formatter = new InlineFormatter();
+            var parameters = new List<SqlTimingParameter>
+            {
+                new SqlTimingParameter() { DbType = "string", Name = "url", Value = "http://www.example.com?myid=1" },
+                new SqlTimingParameter() { DbType = "string", Name = "myid", Value = "1" }
+            };
+            const string command = "SELECT * FROM urls WHERE url = @url OR myid = @myid";
+            var formatted = formatter.FormatSql(command, parameters);
+            Assert.Equal("SELECT * FROM urls WHERE url = 'http://www.example.com?myid=1' OR myid = '1'", formatted);
+        }
+
+        [Fact]
         public void EnsureVerboseSqlServerFormatterOnlyAddsInformation()
         {
             // arrange
@@ -133,13 +149,17 @@ namespace Tests
 			// overwrite the formatter
 	        _formatter = new VerboseSqlServerFormatter(true);
             _commandText = "select 1";
-            const string expectedOutput = "-- Command Type: Text\r\n-- Database: TestDatabase\r\n-- Transaction Scope Iso Level: Serializable\r\n\r\nselect 1;";
             CreateDbCommand(CommandType.Text);
-	        TransactionScope transactionScope = new TransactionScope();
-
+#if NET461
+            const string expectedOutput = "-- Command Type: Text\r\n-- Database: TestDatabase\r\n-- Transaction Scope Iso Level: Serializable\r\n\r\nselect 1;";
+            var transactionScope = new TransactionScope();
             // act
             var actualOutput = GenerateOutput();
 	        transactionScope.Dispose();
+#else
+            const string expectedOutput = "-- Command Type: Text\r\n-- Database: TestDatabase\r\n\r\nselect 1;";
+            var actualOutput = GenerateOutput();
+#endif
 
             // assert
             Assert.Equal(expectedOutput, actualOutput);

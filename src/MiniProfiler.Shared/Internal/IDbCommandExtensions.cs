@@ -1,6 +1,4 @@
-﻿using StackExchange.Profiling.Helpers;
-using StackExchange.Profiling.SqlFormatters;
-using System;
+﻿using StackExchange.Profiling.SqlFormatters;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -28,13 +26,7 @@ namespace StackExchange.Profiling.Internal
         {
             if (command == null || profiler == null) return null;
 
-            var commandText = command.GetReadableCommand();
-            var parameters = command.GetParameters();
-
-            if (profiler.Options.SqlFormatter != null)
-            {
-                commandText = profiler.Options.SqlFormatter.GetFormattedSql(commandText, parameters, command);
-            }
+            var commandText = profiler.Options.SqlFormatter?.GetFormattedSql(command) ?? command.GetReadableCommand();
 
             return profiler.CustomTiming(customType, commandText, commandType);
         }

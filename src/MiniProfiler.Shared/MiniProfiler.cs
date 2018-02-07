@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Runtime.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 using StackExchange.Profiling.Helpers;
 using StackExchange.Profiling.Internal;
@@ -17,9 +18,11 @@ namespace StackExchange.Profiling
     {
         /// <summary>
         /// The options this profiler uses, assigned at creation time.
+        /// It defaults for the global options, if present, as a fall back for all operations.
+        /// The vast majority of use cases will be a single options instance, so this works pretty well.
         /// </summary>
         [IgnoreDataMember]
-        public MiniProfilerBaseOptions Options { get; }
+        public MiniProfilerBaseOptions Options { get; } = DefaultOptions;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="MiniProfiler"/> class. 
@@ -164,7 +167,7 @@ namespace StackExchange.Profiling
         public bool HasUserViewed { get; set; }
 
         // Allows async to properly track the attachment point
-        private readonly FlowData<Timing> _head = new FlowData<Timing>();
+        private readonly AsyncLocal<Timing> _head = new AsyncLocal<Timing>();
 
         // When async context flows aren't preserved, fallback to enable correct profiling in most cases
         private Timing _lastSetHead;
@@ -194,9 +197,9 @@ namespace StackExchange.Profiling
         public IStopwatch GetStopwatch() => Stopwatch;
 
         /// <summary>
-        /// Gets the currently running MiniProfiler for the current HttpContext; null if no MiniProfiler was started.
+        /// Gets the currently running MiniProfiler for the current context; null if no MiniProfiler was started.
         /// </summary>
-        public static MiniProfiler Current => MiniProfilerBaseOptions.CurrentProfilerProvider?.CurrentProfiler;
+        public static MiniProfiler Current => DefaultOptions.ProfilerProvider?.CurrentProfiler;
 
         /// <summary>
         /// A <see cref="IAsyncStorage"/> strategy to use for the current profiler.

@@ -37,7 +37,6 @@ namespace StackExchange.Profiling.Storage
             {
                 throw new ArgumentNullException(nameof(stores), "Please include at least one IAsyncStorage object when initializing a MultiStorageProvider");
             }
-            SetUnviewedAfterSave = Stores.Any(s => s.SetUnviewedAfterSave);
         }
 
         /// <summary>
@@ -118,7 +117,7 @@ namespace StackExchange.Profiling.Storage
         /// </remarks>
         public Task SaveAsync(MiniProfiler profiler)
         {
-            if (Stores == null) return Polyfills.CompletedTask;
+            if (Stores == null) return Task.CompletedTask;
 
             return Task.WhenAll(Stores.Select(s => s.SaveAsync(profiler)));
         }
@@ -206,7 +205,7 @@ namespace StackExchange.Profiling.Storage
         /// <param name="id">The profiler ID to set unviewed.</param>
         public Task SetUnviewedAsync(string user, Guid id)
         {
-            if (Stores == null) return Polyfills.CompletedTask;
+            if (Stores == null) return Task.CompletedTask;
 
             return Task.WhenAll(Stores.Select(s => s.SetUnviewedAsync(user, id)));
         }
@@ -241,7 +240,7 @@ namespace StackExchange.Profiling.Storage
         /// <param name="id">The profiler ID to set viewed.</param>
         public Task SetViewedAsync(string user, Guid id)
         {
-            if (Stores == null) return Polyfills.CompletedTask;
+            if (Stores == null) return Task.CompletedTask;
 
             return Task.WhenAll(Stores.Select(s => s.SetViewedAsync(user, id)));
         }

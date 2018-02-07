@@ -1,20 +1,23 @@
 ﻿using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Samples.AspNetCore.Models;
-using System.IO;
+using StackExchange.Profiling.Storage;
 
 namespace Samples.AspNetCore
 {
     public class Startup
     {
-        public static string SqliteConnectionString { get; set; }
+        public static string SqliteConnectionString { get; } = "Data Source=Samples; Mode=Memory; Cache=Shared";
+        private static readonly SqliteConnection TrapConnection = new SqliteConnection(SqliteConnectionString);
 
         public Startup(IHostingEnvironment env)
         {
-            SqliteConnectionString = "Data Source = " + Path.Combine(env.ContentRootPath, @"App_Data\TestMiniProfiler.sqlite");
+            TrapConnection.Open(); //Hold the in-memory SQLite database open
+
             var builder = new ConfigurationBuilder()
                 .SetBasePath(env.ContentRootPath)
                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
@@ -34,7 +37,7 @@ namespace Samples.AspNetCore
 
             // Add MiniProfiler services
             // If using Entity Framework Core, add profiling for it as well (see the end)
-            // Note .AddMiniProfiler() returns a IMiniProfilerBuilder for easy intellisense
+            // Note .AddMiniProfiler() returns a IMiniProfilerBuilder for easy Intellisense
             services.AddMiniProfiler(options =>
             {
                 // ALL of this is optional. You can simply call .AddMiniProfiler() for all defaults
@@ -45,12 +48,13 @@ namespace Samples.AspNetCore
 
                 // Control storage - the default is 30 minutes
                 //(options.Storage as MemoryCacheStorage).CacheDuration = TimeSpan.FromMinutes(60);
+                //options.Storage = new SqlServerStorage("Data Source=.;Initial Catalog=MiniProfiler;Integrated Security=True;");
 
                 // Control which SQL formatter to use, InlineFormatter is the default
                 //options.SqlFormatter = new StackExchange.Profiling.SqlFormatters.InlineFormatter();
 
                 // To control authorization, you can use the Func<HttpRequest, bool> options:
-                //options.ResultsAuthorize = request => MyGetUserFunction(request).CanSeeMiniProfiler;
+                options.ResultsAuthorize = request => !Program.DisableProfilingResults;
                 //options.ResultsListAuthorize = request => MyGetUserFunction(request).CanSeeMiniProfiler;
 
                 // To control which requests are profiled, use the Func<HttpRequest, bool> option:
@@ -60,7 +64,7 @@ namespace Samples.AspNetCore
                 //options.UserIdProvider =  request => MyGetUserIdFunction(request);
 
                 // Optionally swap out the entire profiler provider, if you want
-                // The default handles async and works fine for almost all appliations
+                // The default handles async and works fine for almost all applications
                 //options.ProfilerProvider = new MyProfilerProvider();
             }).AddEntityFramework();
         }
@@ -91,6 +95,15 @@ namespace Samples.AspNetCore
                     name: "default",
                     template: "{controller=Home}/{action=Index}/{id?}");
             });
+
+            var serviceScopeFactory = app.ApplicationServices.GetRequiredService<IServiceScopeFactory>();
+            using (var serviceScope = serviceScopeFactory.CreateScope())
+            {
+                var dbContext = serviceScope.ServiceProvider.GetService<SampleContext>();
+                dbContext.Database.EnsureCreated();
+            }
+            // For nesting test routes
+            new SqliteStorage(SqliteConnectionString).WithSchemaCreation();
         }
     }
 }

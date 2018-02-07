@@ -1,11 +1,12 @@
-﻿using StackExchange.Profiling.Helpers;
-using StackExchange.Profiling.Storage;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Cryptography;
 using System.Web;
+using StackExchange.Profiling.Helpers;
+using StackExchange.Profiling.Internal;
+using StackExchange.Profiling.Storage;
 
 namespace StackExchange.Profiling
 {
@@ -17,10 +18,14 @@ namespace StackExchange.Profiling
         /// <summary>
         /// Creates a new <see cref="MiniProfilerOptions"/> with <see cref="AspNetRequestProvider"/> as the provider.
         /// </summary>
-        public MiniProfilerOptions() : base()
+        public MiniProfilerOptions()
         {
-            // The default profiler for old ASP.NET (non-Core) is the WebRequestProfilerProvider
-            this.SetProvider(new AspNetRequestProvider());
+            // The default profiler for old ASP.NET (non-Core) is the AspNetRequestProvider
+            // Only set this provider by default if we're in a web application
+            if (HttpRuntime.AppDomainAppId != null)
+            {
+                ProfilerProvider = new AspNetRequestProvider();
+            }
             // Default storage is 30 minutes in-memory
             Storage = new MemoryCacheStorage(TimeSpan.FromMinutes(30));
         }
@@ -73,7 +78,7 @@ namespace StackExchange.Profiling
         public override string VersionHash => _versionHash ?? (_versionHash = GetVersionHash());
 
         /// <summary>
-        /// On first call, set the version hash for all cache breakers
+        /// On first call, set the version hash for all cache breakers.
         /// </summary>
         private string GetVersionHash()
         {
@@ -112,6 +117,14 @@ namespace StackExchange.Profiling
                 Debug.WriteLine($"Error calculating folder hash: {e}\n{e.StackTrace}");
                 return base.VersionHash;
             }
+        }
+
+        /// <summary>
+        /// Configures the <see cref="MiniProfilerHandler"/>.
+        /// </summary>
+        protected override void OnConfigure()
+        {
+            MiniProfilerHandler.Configure(this);
         }
     }
 }

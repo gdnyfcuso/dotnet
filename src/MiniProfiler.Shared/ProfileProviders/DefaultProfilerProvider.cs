@@ -1,4 +1,5 @@
 ﻿using StackExchange.Profiling.Internal;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace StackExchange.Profiling
@@ -10,7 +11,7 @@ namespace StackExchange.Profiling
     /// </summary>
     public class DefaultProfilerProvider : IAsyncProfilerProvider
     {
-        private static readonly FlowData<MiniProfiler> _profiler = new FlowData<MiniProfiler>();
+        private static readonly AsyncLocal<MiniProfiler> _profiler = new AsyncLocal<MiniProfiler>();
         /// <summary>
         /// The current profiler instance, statically resolved and backed by AsyncLocal{T}.
         /// </summary>
@@ -86,10 +87,6 @@ namespace StackExchange.Profiling
                 return;
             }
             storage.Save(profiler);
-            if (storage.SetUnviewedAfterSave && !profiler.HasUserViewed)
-            {
-                storage.SetUnviewed(profiler.User, profiler.Id);
-            }
         }
 
         /// <summary>
@@ -106,10 +103,6 @@ namespace StackExchange.Profiling
                 return;
             }
             await storage.SaveAsync(profiler).ConfigureAwait(false);
-            if (storage.SetUnviewedAfterSave && !profiler.HasUserViewed)
-            {
-                await storage.SetUnviewedAsync(profiler.User, profiler.Id).ConfigureAwait(false);
-            }
         }
     }
 }
